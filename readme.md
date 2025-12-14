@@ -1,138 +1,65 @@
-Com base no código que você implementou e na teoria de Privacidade Diferencial, aqui estão as respostas detalhadas para os itens solicitados para o seu relatório ou trabalho.
+================================================================================
+RELATÓRIO TÉCNICO: CLASSIFICADOR BASEADO EM VIZINHANÇA COM PRIVACIDADE DIFERENCIAL
+================================================================================
 
----
+1. VISÃO GERAL
+--------------------------------------------------------------------------------
+Este projeto implementa um classificador supervisionado baseado em instâncias 
+(semelhante ao k-NN, mas utilizando Raio Fixo) aplicado ao conjunto de dados 
+"Adult Income" (Census Income). 
 
-### 1. Pseudo-código do kNN (Com e Sem Privacidade)
+O objetivo é prever a IDADE ('age') de um indivíduo com base em seus outros 
+atributos censitários, comparando o desempenho de uma abordagem tradicional 
+versus uma abordagem com Privacidade Diferencial (Mecanismo de Laplace).
 
-Aqui descrevemos o fluxo do algoritmo. A diferença crucial ocorre na etapa de "Votação".
+2. DETALHES DA IMPLEMENTAÇÃO
+--------------------------------------------------------------------------------
+Linguagem: Python 3.x
+Bibliotecas: Numpy, Pandas, Matplotlib, Kagglehub.
 
-**Entrada:** Conjunto de Treino $(X_{train}, Y_{train})$, Instância de Teste $x_{query}$, Hiperparâmetro $k$, Orçamento de privacidade $\epsilon$.
-**Saída:** Classe prevista $\hat{y}$.
+A. PRÉ-PROCESSAMENTO:
+   - Remoção de colunas irrelevantes: 'fnlwgt', 'education', 'capital-gain', etc.
+   - Limpeza de dados: Remoção de linhas contendo dados faltantes ('?').
+   - Codificação: Conversão de variáveis categóricas para numéricas utilizando 
+     'pd.factorize' (Label Encoding), permitindo o cálculo de distâncias geométricas.
+   - Divisão: Treino (70%) e Teste (30%) com embaralhamento aleatório.
 
-1.  **Carregar dados:** Armazenar $X_{train}$ e $Y_{train}$ na memória.
-2.  **Para cada** instância de teste $x_{query}$:
-3.  **Calcular Distâncias:**
-    *   Calcular a distância Euclidiana entre $x_{query}$ e todos os pontos em $X_{train}$.
-    *   $d(x_{query}, x_i) = \sqrt{\sum (x_{query} - x_i)^2}$
-4.  **Identificar Vizinhos:**
-    *   Ordenar as distâncias em ordem crescente.
-    *   Selecionar os índices das $k$ menores distâncias.
-    *   Recuperar os rótulos (classes) $Y$ desses $k$ vizinhos.
-5.  **Contabilizar Votos (Contagem Real):**
-    *   Para cada classe única $c$, calcular $count(c)$: quantos vizinhos pertencem à classe $c$.
-6.  **Se kNN Tradicional:**
-    *   Retornar a classe com o maior valor de $count(c)$.
-7.  **Se kNN com Privacidade (Mecanismo de Laplace):**
-    *   Definir sensibilidade $\Delta f = 1$.
-    *   Calcular o parâmetro de escala $b = \Delta f / \epsilon$.
-    *   Para cada classe $c$:
-        *   Gerar ruído $ruido \sim Laplace(0, b)$.
-        *   Calcula $voto\_ruidoso(c) = count(c) + ruido$.
-    *   Retornar a classe com o maior valor de $voto\_ruidoso(c)$.
+B. ALGORITMO DE CLASSIFICAÇÃO (Raio Fixo):
+   Ao contrário do k-NN padrão que busca os 'k' vizinhos, este algoritmo utiliza 
+   uma abordagem baseada em Raio (Radius Neighbors):
+   1. Para cada instância de teste, calcula a distância Euclidiana para todo o treino.
+   2. Seleciona todos os vizinhos que estão dentro de um raio de distância (r <= 6).
+   3. Realiza a votação com base nas classes (idades) desses vizinhos.
 
----
+C. MECANISMO DE PRIVACIDADE (LAPLACE):
+   A privacidade é garantida na etapa de agregação dos votos (Output Perturbation).
+   
+   - Sensibilidade: A sensibilidade global é considerada em relação ao histograma 
+     de contagem de votos.
+   - Composição do Orçamento: O orçamento epsilon é dividido pelo número de classes 
+     únicas (L) presentes no treino (idades possíveis).
+     -> Epsilon_classe = Epsilon / L
+     -> Escala do Ruído (b) = 1 / Epsilon_classe = L / Epsilon
+   
+   Isso garante que a distribuição de frequência das idades dos vizinhos seja 
+   ofuscada antes de decidir a classe vencedora.
 
-### 2. Como codificou atributos não numéricos
+3. PARÂMETROS UTILIZADOS
+--------------------------------------------------------------------------------
+- Raio de vizinhança (r): 6.0
+- Orçamentos de Privacidade (Epsilon): [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+  * Epsilon 0.5: Muito Ruído (Alta Privacidade / Baixa Utilidade).
+  * Epsilon 3.0: Pouco Ruído (Baixa Privacidade / Alta Utilidade).
 
-No código apresentado, a conversão é feita explicitamente na linha:
-`self.X_train = np.array(X, dtype=np.float32)`
+4. RESULTADOS E MÉTRICAS
+--------------------------------------------------------------------------------
+O sistema gera:
+1. Arquivos .csv com as predições para cada nível de privacidade.
+2. Cálculo de Acurácia (Taxa de acerto exato da idade).
+3. Gráfico de linha comparando a recuperação da acurácia conforme o Epsilon aumenta.
 
-No entanto, para que essa linha funcione sem erro e para que a distância Euclidiana faça sentido, **o pré-processamento deve ter ocorrido antes de chamar a classe**. Seus dados brutos (strings, categorias) devem ter sido transformados em números.
+Nota: Como a variável alvo é 'age' (muitas classes possíveis, ex: 18 a 90 anos), 
+a acurácia absoluta tende a ser naturalmente baixa. O foco da análise é a 
+diferença relativa (gap) entre o modelo tradicional e o privado.
 
-**Resposta sugerida:**
-> "Como o algoritmo utiliza a distância Euclidiana, que é uma medida geométrica, todos os atributos categóricos foram transformados em representações numéricas durante a etapa de pré-processamento (antes da execução do kNN). As técnicas utilizadas geralmente são **One-Hot Encoding** (para variáveis nominais sem ordem) ou **Label Encoding** (para variáveis ordinais ou binárias), garantindo que a matriz de entrada $X$ seja estritamente numérica (`float32`) para permitir operações algébricas."
-
----
-
-### 3. Como aplicou o mecanismo de Laplace
-
-O mecanismo foi aplicado na etapa de agregação (votação), conhecido como **Perturbação do Resultado Intermediário**.
-
-**Resposta sugerida:**
-> "O mecanismo de Laplace foi aplicado sobre a contagem de votos das classes vizinhas (histograma de votos). Em vez de simplesmente escolher a classe majoritária entre os $k$ vizinhos, adicionou-se um ruído aleatório extraído de uma distribuição de Laplace, centrado em 0 com escala $b = 1/\epsilon$, a cada contagem de classe. A classe predita foi aquela que obteve a maior contagem após a adição do ruído. Isso mascara a influência exata de qualquer vizinho individual na decisão final."
-
----
-
-### 4. Qual valor de orçamento utilizado e o porquê
-
-Você utilizou os valores definidos na instrução: $\epsilon \in [0.5, 1, 5, 10]$.
-
-**Resposta sugerida:**
-> "O orçamento de privacidade ($\epsilon$) controla o *trade-off* entre privacidade e utilidade.
-> *   **Para cada predição**, o orçamento total $\epsilon$ foi utilizado para calibrar o ruído da votação.
-> *   **Valores Baixos ($\epsilon=0.5, 1$):** Indicam alta privacidade. O ruído adicionado é grande, o que protege a identidade dos vizinhos, mas pode alterar a classe vencedora incorretamente, diminuindo a acurácia.
-> *   **Valores Altos ($\epsilon=5, 10$):** Indicam baixa privacidade. O ruído é pequeno, mantendo o resultado muito próximo do kNN original (alta acurácia), mas oferecendo menor proteção aos dados."
-
----
-
-### 5. Qual a sensibilidade global ($\Delta f$) e o porquê?
-
-**Valor:** $\Delta f = 1$.
-
-**Resposta sugerida:**
-> "A sensibilidade global utilizada foi **1**. Isso ocorre porque a função de consulta é uma **contagem de votos**. Ao modificar, adicionar ou remover um único registro da base de dados de treino, o conjunto de $k$ vizinhos mais próximos pode ser alterado. No pior caso, um vizinho da classe A é substituído por um vizinho da classe B. Isso altera a contagem da classe A em -1 ou da classe B em +1. Portanto, a magnitude máxima da mudança na contagem de qualquer classe dada a alteração de um único indivíduo é 1."
-
----
-
-### 6. Gráfico de Acurácia por valor de $\epsilon$
-
-Para gerar este gráfico, você precisa calcular a acurácia (porcentagem de acertos) comparando o arquivo `y_pred` gerado com o `y_true`.
-
-Como não tenho os seus arquivos de resultado, criei o código Python abaixo que **calcula a acurácia automaticamente** e plota o gráfico. Você só precisa ter os arquivos CSV gerados pelo seu algoritmo na mesma pasta.
-
-```python
-import pandas as pd
-import matplotlib.pyplot as plt
-from sklearn.metrics import accuracy_score
-import os
-
-# Definição dos epsilons usados
-epsilons = [0.5, 1, 5, 10]
-
-# Lista para armazenar as acurácias
-acuracias_privadas = []
-
-# 1. Calcular Acurácia do kNN Tradicional (Baseline)
-# Certifique-se que o arquivo existe
-df_trad = pd.read_csv('resultado_knn_tradicional.csv')
-acc_tradicional = accuracy_score(df_trad['y_true'], df_trad['y_pred'])
-print(f"Acurácia Tradicional: {acc_tradicional:.4f}")
-
-# 2. Calcular Acurácias dos Privados
-for eps in epsilons:
-    filename = f'resultado_knn_laplace_eps_{eps}.csv'
-    if os.path.exists(filename):
-        df_priv = pd.read_csv(filename)
-        acc = accuracy_score(df_priv['y_true'], df_priv['y_pred'])
-        acuracias_privadas.append(acc)
-        print(f"Acurácia (eps={eps}): {acc:.4f}")
-    else:
-        print(f"Arquivo {filename} não encontrado!")
-        acuracias_privadas.append(0) # Valor dummy se faltar arquivo
-
-# 3. Gerar o Gráfico
-plt.figure(figsize=(10, 6))
-
-# Linha da privacidade diferencial
-plt.plot(epsilons, acuracias_privadas, marker='o', linestyle='-', color='b', label='kNN com Laplace (Privado)')
-
-# Linha de referência (kNN sem privacidade)
-# Plotamos uma linha horizontal constante
-plt.axhline(y=acc_tradicional, color='r', linestyle='--', label=f'kNN Tradicional (Acc: {acc_tradicional:.2f})')
-
-# Estilização
-plt.title('Impacto da Privacidade Diferencial na Acurácia do kNN')
-plt.xlabel('Orçamento de Privacidade (epsilon)')
-plt.ylabel('Acurácia')
-plt.xticks(epsilons) # Garante que mostre apenas os epsilons do teste no eixo X
-plt.grid(True, which='both', linestyle='--', linewidth=0.5)
-plt.legend()
-
-# Salvar ou mostrar
-plt.savefig('grafico_acuracia_epsilon.png')
-plt.show()
-```
-
-**O que esperar do gráfico:**
-*   A linha azul (Privado) deve começar mais baixa em $\epsilon=0.5$ e subir conforme o $\epsilon$ aumenta.
-*   Em $\epsilon=10$, a linha azul deve estar muito próxima ou igual à linha vermelha tracejada (Tradicional), pois o ruído é muito baixo.
+================================================================================
